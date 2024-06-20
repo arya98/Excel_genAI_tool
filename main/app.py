@@ -1,123 +1,150 @@
-# Importing necessary libraries
+#%pip install streamlit openai llama-index nltk
+
 import os
-import re
 import time
 import fnmatch
-import shutil
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from langchain_openai import ChatOpenAI
-from openai import OpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent
+from langchain_community.utilities import SQLDatabase
+from sqlalchemy import create_engine
+from openai import OpenAI
+
 
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 
 
-# Initialize SQLite engine
+# Load environment variables
+load_dotenv()
+os.remove('/main/excel_data.db')
+#Dictionary to store the extracted dataframes
+data = {}
 engine = create_engine('sqlite:///excel_data.db', echo=True)
 
-# Dictionary to store the extracted dataframes
-data = {}
 
 def main():
-    """
-    Main function to run the Streamlit app.
-    Handles file upload, data extraction, chat window, and user interaction.
-    """
-    client = OpenAI()
-    st.set_page_config(page_title='DataAnalysis', page_icon=':earth_americas:', layout='wide')
-    st.title("\nData Analysis for Supply Chain")
-    st.markdown('<style>div.block-container {padding-top:3rem;}</style>', unsafe_allow_html=True)
 
-    # Sidebar for file upload and API key input
+    client = OpenAI()
+    st.set_page_config(page_title='DataAnalysis', page_icon='	:earth_americas:', layout='wide' )
+    st.title("Data Analysis for supplychain")
+    st.markdown('<style>div.block-container {paddin-top:1rem;}</style>', unsafe_allow_html=True)
+
+
+    #reading the csv file
+    
+    #Side Menu Bar
     with st.sidebar:
         st.title("")
-        st.markdown("Upload the file")
-        file_upload = st.file_uploader("Select the file", accept_multiple_files=True, type=['csv', 'xls', 'xlsx'])
+        #Activating Demo Data
+        st.markdown("Upload the file ")
+        file_upload = st.file_uploader("",accept_multiple_files=True,type = ['csv','xls','xlsx'])
+        print(file_upload)
+
+
+        # #Adding users API Key
+        # user_api_key =  "sk-proj-qP1ZQPrJc8ZaQ9uz8Vu8T3BlbkFJYzRYiQB5QM8aGgbmgNSD"
+
 
     if len(file_upload) != 0:
-        
-        data = extract_file_csv(file_upload, engine)
+        print(file_upload)
+        for i in file_upload:
+            filename = i.name
         st.write('\nThe file has been uploaded successfully.')
-
-        
-        df1 = st.selectbox("Here's your uploaded data!", tuple(data.keys()), index=0)
+        data  = extract_file_csv(file_upload, engine)
+       
+        df1 = st.selectbox("Here's your uploaded data!",
+                          tuple(data.keys()),index=0)
         st.dataframe(data[df1])
 
         db = SQLDatabase.from_uri('sqlite:///excel_data.db')
+       
         llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
         agent_executor = create_sql_agent(llm, db=db, agent_type="openai-tools", verbose=True)
-
-        # Start the chat with the  agent
+            
+        #starting the chat with the PandasAI agent
         chat_window(agent_executor, client)
+        
     else:
         st.warning("Please select the correct file. You can upload a CSV or an Excel file.")
 
-
-def chat_window(assistant_agent, client):
-    """
-    Handle the chat window functionality in Streamlit.
-
-    Args:
-        assistant_agent: The language model or agent used for analysis.
-        client: The OpenAI client.
-    """
+   
+#Functuion for chat window
+def chat_window( analyst, client):
     with st.chat_message("assistant"):
-        st.markdown("Enter your queries:")
+        st.markdown("Enter your queries: ")
 
-    # Initializing message history
+    #Initilizing message history
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    
 
-    # Displaying the message history on re-run
+    #Displaying the message history on re-reun
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
+            #priting the questions
             if 'question' in message:
                 st.markdown(message["question"])
+            #printing the code generated and the evaluated code
             elif 'response' in message:
+                #getting the response
                 if message['chart_path'] is not None:
                     st.image(message['chart_path'])
                 st.markdown(message['response'])
+                
+            #retrieving error messages
             elif 'error' in message:
                 st.text(message['error'])
 
-    # Sample queries
+
+    #Getting the questions from the users
     from streamlit_pills import pills
-    selected = None
+    selected =None
     st.session_state.pills_index = None
-    #selected = pills("Sample Queries", ["None", "Display a pie chart to illustrate the product distribution.", "Analyze the sales trend using a line chart."])
+    selected = pills("Sample Queries", [ "None", "Display a pie chart to illustrate the product distribution.", "Analyze the sales trend using a line chart."])
 
     user_question = st.chat_input("What are you curious about? ")
+    
+
+    # prompt=''' 
+    
+    # You are an expert management consultant specializing in supply chain management. 
+    # And ensure the insights generated is directly related to the graph generated.
+    # Analyze the given dataset to answer the given prompt :{0}. 
+
+    # Also remove the duplicate entry id any. Use only the provided data for analysis.
+    # '''
+
 
     prompt = '''
-    <prompt>
-    <context>
-        You are an expert management consultant specializing in supply chain management. You need to analyze the given dataset to answer specific questions related to supply chain performance. The dataset may contain duplicate entries, which need to be identified and removed before analysis.
-    </context>
-    <task>
-        <steps>
-        <step>Remove any duplicate entries from the provided dataset.</step>
-        <step>Based on the query, analyze the cleaned dataset to generate insights.</step>
-        <step>Ensure the insights generated are directly related to the query given and graph generated.</step>
-        </steps>
-    </task>
-    <query>
-    {0}
-    </query>
-    <expectedOutput>
-        <insights>
-        <insight>Clear and concise analysis related to supply chain management.</insight>
-        <insight>Specific insights that are directly supported by the graph generated from the dataset.</insight>
-        </insights>
-    </expectedOutput>
-    </prompt>
-    '''
+        <prompt>
+        <context>
+            You are an expert management consultant specializing in supply chain management. You need to analyze the given dataset to answer specific questions related to supply chain performance. The dataset may contain duplicate entries, which need to be identified and removed before analysis.
+        </context>
+        <task>
+            <steps>
+            <step>Remove any duplicate entries from the provided dataset.</step>
+            <step>Based on the query, Analyze the cleaned dataset to generate insights.</step>
+            <step>Ensure the insights generated are directly related to the query given and graph generated.</step>
+            </steps>
+        </task>
+        <query>
+        {0}
+        </query>
 
+        <expectedOutput>
+            <insights>
+            <insight>Clear and concise analysis related to supply chain management.</insight>
+            <insight>Specific insights that are directly supported by the graph generated from the dataset.</insight>
+            </insights>
+        </expectedOutput>
+        </prompt>
+        '''
+    
     if selected != 'None':
         user_question = selected
         st.session_state.pills_index = None
@@ -126,50 +153,60 @@ def chat_window(assistant_agent, client):
     query = prompt.format(user_question)
 
     if user_question:
+        #Displaying the user question in the chat message
         with st.chat_message("user"):
             st.markdown(user_question)
-        st.session_state.messages.append({"role": "user", "question": user_question})
-
+        #Adding user question to chat history
+        st.session_state.messages.append({"role":"user","question":user_question})
+        
         try:
             with st.spinner("Analyzing..."):
-                response = assistant_agent.invoke(query)  # Extract data from SQL db
-                combined_string = str()
-                chart_path, chart_content = generate_chart(response['output'], client)  # Generate charts
-                insights = generate_insight(response['output'], client)  # Generate insights
+                response  = analyst.invoke(query) # to extract the data from SQL db
+                combined_string=str()
+                chart_path, chart_content = generate_chart(response['output'], client)  #using assiastant api : we are generating charts
+                insights = generate_insight(response['output'], client) #using assiastant api: we are generating insights
+                from pathlib import Path
 
                 if chart_path is not None:
-                    st.image(chart_path)
+                    my_file = Path(chart_path)
+                    if my_file.is_file():
+                        st.image(chart_path)
+                    else:
+                        chart_path = None
+                    #    st.write(chart_content)
 
-                if chart_path is not None and chart_content is not None:
-                    combined_string += 'Chart Explanation: \n' + chart_content
+                if chart_path is not None and chart_content is not None :
+                    combined_string += 'Chart Explanation: \n'+ chart_content
 
-                if insights is not None:
-                    combined_string += ' \n' + insights
-
+                if insights is not None:   
+                    combined_string += ' \n'+ insights
+                
                 st.write(combined_string)
-                st.session_state.messages.append({"role": "assistant", "response": combined_string, "chart_path": chart_path})
+                st.session_state.messages.append({"role":"assistant","response":combined_string, "chart_path":chart_path})
         except Exception as e:
             st.write(e)
             error_message = "Sorry, Couldn't generate the answer! Please try rephrasing your question!"
 
+        
+    #Function to clear history
     def clear_chat_history():
-        """Function to clear chat history."""
         st.session_state.messages = []
+    #Button for clearing history
 
     st.sidebar.markdown("Click to Clear Chat history")
-    st.sidebar.button("Clear Chat", on_click=clear_chat_history)
+    st.sidebar.button("Clear Chat",on_click=clear_chat_history)
+
 
 def extract_file_csv(raw_files_list, engine):
     """
-    Extract dataframes from the uploaded files.
-
-    Args:
-        raw_files_list (list): List of uploaded files.
-        engine: The SQLAlchemy engine for SQLite.
-
-    Returns:
-        dfs: A dictionary containing the extracted dataframes.
+    This function extracts dataframes from the uploaded file/files
+    Args: 
+        raw_file: Upload_File object
+    Processing: Based on the type of file read_csv or read_excel to extract the dataframes
+    Output: 
+        dfs:  a dictionary with the dataframes
     """
+
     dfs = {}
     for raw_file in raw_files_list:
         if raw_file.name.split('.')[1] == 'csv':
@@ -177,58 +214,58 @@ def extract_file_csv(raw_files_list, engine):
             df = pd.read_csv(raw_file)
             dfs[csv_name] = df
             dfs[csv_name].to_sql(csv_name, con=engine, if_exists='replace', index=False)
-        elif (raw_file.name.split('.')[1] == 'xlsx') or (raw_file.name.split('.')[1] == 'xls'):
+
+        elif (raw_file.name.split('.')[1] == 'xlsx') or (raw_file.name.split('.')[1] == 'xls') :
+            # Read the Excel file
             xls = pd.ExcelFile(raw_file)
+
+            # Iterate through each sheet in the Excel file and store them into dataframes
+            
             for sheet_name in xls.sheet_names:
-                dfs[str(raw_file.name.split('.')[0]) + "__" + sheet_name] = pd.read_excel(raw_file, sheet_name=sheet_name)
-                pd.read_excel(raw_file, sheet_name=sheet_name).to_sql(sheet_name, con=engine, if_exists='replace', index=False)
+                dfs[str(raw_file.name.split('.')[0])+"__"+sheet_name] = (pd.read_excel(raw_file, sheet_name=sheet_name))
+                (pd.read_excel(raw_file, sheet_name=sheet_name)).to_sql(sheet_name, con=engine, if_exists='replace', index=False)
+
+    #return the dataframes
+    
     return dfs
 
-
-
 def generate_chart(message, client):
-    """
-    Generate a chart based on the given message.
+    # Prepare the prompt
 
-    Args:
-        message (str): The message containing the data.
-        client: The OpenAI client.
+    i= len(fnmatch.filter(os.listdir('./main/exports/charts'), '*.png'))
+    chart_path='./main/exports/charts/chart'+ '__'+str(i)+'.png'
+    
+    # ci_prompt = "Please generate a chart using following data:  \n" + message
 
-    Returns:
-        chart_path (str): The path to the generated chart image.
-        content_description (str): The description of the chart content.
-    """
+    prompt ='''
+        <prompt>
+        <context>
+            You are required to generate a chart using the provided dataset. Ensure the chart is neatly labelled and utilizes different colors to distinguish between various data points. A legend must be included to label the different elements within the chart for clear interpretation.
+        </context>
+        <task>
+            <steps>
+            <step>Based on the given data.</step>
+            <step>Clean the dataset by removing any duplicate entries.</step>
+            <step>Generate a chart using the cleaned dataset.</step>
+            <step>Apply different colors to distinguish between various data points.</step>
+            <step>Include a legend to label the different elements within the chart.</step>
+            <step>Ensure all axes and data points are neatly labelled for clarity.</step>
+            </steps>
+        </task>
 
-    i = len(fnmatch.filter(os.listdir('./exports/charts'), '*.png'))
-    chart_path = './exports/charts/chart' + '__' + str(i) + '.png'
-
-    prompt = '''
-    <prompt>
-    <context>
-        You are required to generate a chart using the provided dataset. Ensure the chart is neatly labelled and utilizes different colors to distinguish between various data points. A legend must be included to label the different elements within the chart for clear interpretation.
-    </context>
-    <task>
-        <steps>
-        <step>Based on the given data.</step>
-        <step>Clean the dataset by removing any duplicate entries.</step>
-        <step>Generate a chart using the cleaned dataset.</step>
-        <step>Apply different colors to distinguish between various data points.</step>
-        <step>Include a legend to label the different elements within the chart.</step>
-        <step>Ensure all axes and data points are neatly labelled for clarity.</step>
-        </steps>
-    </task>
-    <data>
-    {0}
-    </data>
-    <expectedOutput>
-        <chart>
-        <description>A neatly labelled chart with different colors used for various data points and a legend included for clear labelling of the chart elements.</description>
-        </chart>
-    </expectedOutput>
-    </prompt>
-    '''
+        <data>
+        {0}
+        </data>
+        <expectedOutput>
+            <chart>
+            <description>A neatly labelled chart with different colors used for various data points and a legend included for clear labelling of the chart elements.</description>
+            </chart>
+        </expectedOutput>
+        </prompt>
+        '''
 
     ci_prompt = prompt.format(message)
+    print(ci_prompt)
 
     try:
         # Create a thread and run the assistant
@@ -246,7 +283,6 @@ def generate_chart(message, client):
                 instructions="You generate plots for the given data",
                 model="gpt-4o",
                 tools=[{"type": "code_interpreter"}],
-
             )
         
         # Run the thread
@@ -285,7 +321,7 @@ def generate_chart(message, client):
                 # Save the generated chart to a file
                 with open(chart_path, "wb") as f:
                     f.write(raw_response.content)
-                    return (chart_path, content_description)
+                return (chart_path, content_description)
 
             elif run.status == "failed":
                 print("Unable to generate chart")
@@ -303,17 +339,6 @@ def generate_chart(message, client):
 
 
 def generate_insight(message, client):
-    """
-    Generate  insights based on the given message.
-
-    Args:
-        message (str): The message containing the data.
-        client: The OpenAI client.
-
-    Returns:
-        msg (str): The insights generated
-
-    """
     # Prepare the prompt
 
     ci_prompt = "Please generate insights and next immediate action steps to improve, based on the following data: \n" + message
@@ -371,7 +396,7 @@ def generate_insight(message, client):
                     cleaned_msg = msg.replace('### ', '').replace('**', '')
 
                     # Printing the cleaned text
-
+                    print(cleaned_msg)
                     return (cleaned_msg)
                 else:
                     return None
@@ -389,6 +414,10 @@ def generate_insight(message, client):
     return (None, "🤔 Could you please rephrase your query and try again?")
 
 
-
 if __name__ == "__main__":
     main()
+
+
+
+
+
