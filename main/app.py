@@ -48,9 +48,12 @@ def main():
         file_upload = st.file_uploader("",accept_multiple_files=True,type = ['csv','xls','xlsx'])
         print(file_upload)
 
+        
+        #Adding users API Key
+        api_key = st.text_input('Please add your API key',placeholder='Enter your API key here',type = 'password')
+    
 
-        # #Adding users API Key
-        # user_api_key =  "sk-proj-qP1ZQPrJc8ZaQ9uz8Vu8T3BlbkFJYzRYiQB5QM8aGgbmgNSD"
+    os.environ["OPENAI_API_KEY"] =  api_key
 
 
     if len(file_upload) != 0:
