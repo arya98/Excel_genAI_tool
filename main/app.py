@@ -155,7 +155,9 @@ def chat_window( analyst, client):
     if selected != 'None':
         user_question = selected
         st.session_state.pills_index = None
-        selected = 'None'
+        st.session_state.pills_index = None
+        selected = pills("Sample Queries", [ "None", "Display a pie chart to illustrate the product distribution.", "Analyze the sales trend using a line chart."])
+
 
     query = prompt.format(user_question)
 
