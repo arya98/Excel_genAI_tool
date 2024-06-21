@@ -12,7 +12,7 @@ from langchain_community.agent_toolkits import create_sql_agent
 from langchain_community.utilities import SQLDatabase
 from sqlalchemy import create_engine
 from openai import OpenAI
-
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +21,13 @@ api_key = os.getenv("OPENAI_API_KEY")
 
 # Load environment variables
 load_dotenv()
-os.remove('/main/excel_data.db')
+db_path = '/main/excel_data.db'
+
+my_file = Path(db_path)
+if my_file.is_file():
+    os.remove(db_path)
+    print(db_path)
+
 #Dictionary to store the extracted dataframes
 data = {}
 engine = create_engine('sqlite:///excel_data.db', echo=True)
@@ -30,12 +36,9 @@ engine = create_engine('sqlite:///excel_data.db', echo=True)
 def main():
 
     client = OpenAI()
-    st.set_page_config(page_title='DataAnalysis', page_icon='	:earth_americas:', layout='wide' )
+    st.set_page_config(page_title='DataAnalysis', page_icon='	:graph:', layout='wide' )
     st.title("Data Analysis for supplychain")
     st.markdown('<style>div.block-container {paddin-top:1rem;}</style>', unsafe_allow_html=True)
-
-
-    #reading the csv file
     
     #Side Menu Bar
     with st.sidebar:
@@ -54,8 +57,9 @@ def main():
         print(file_upload)
         for i in file_upload:
             filename = i.name
-        st.write('\nThe file has been uploaded successfully.')
+
         data  = extract_file_csv(file_upload, engine)
+        st.write('\nThe file has been uploaded successfully.')
        
         df1 = st.selectbox("Here's your uploaded data!",
                           tuple(data.keys()),index=0)
@@ -63,7 +67,7 @@ def main():
 
         db = SQLDatabase.from_uri('sqlite:///excel_data.db')
        
-        llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+        llm = ChatOpenAI(model="gpt-4o", temperature=0)
         agent_executor = create_sql_agent(llm, db=db, agent_type="openai-tools", verbose=True)
             
         #starting the chat with the PandasAI agent
@@ -165,7 +169,7 @@ def chat_window( analyst, client):
                 combined_string=str()
                 chart_path, chart_content = generate_chart(response['output'], client)  #using assiastant api : we are generating charts
                 insights = generate_insight(response['output'], client) #using assiastant api: we are generating insights
-                from pathlib import Path
+
 
                 if chart_path is not None:
                     my_file = Path(chart_path)
@@ -235,37 +239,37 @@ def generate_chart(message, client):
     i= len(fnmatch.filter(os.listdir('./main/exports/charts'), '*.png'))
     chart_path='./main/exports/charts/chart'+ '__'+str(i)+'.png'
     
-    # ci_prompt = "Please generate a chart using following data:  \n" + message
+    ci_prompt = "Please generate a chart using following data:  \n" + message
 
-    prompt ='''
-        <prompt>
-        <context>
-            You are required to generate a chart using the provided dataset. Ensure the chart is neatly labelled and utilizes different colors to distinguish between various data points. A legend must be included to label the different elements within the chart for clear interpretation.
-        </context>
-        <task>
-            <steps>
-            <step>Based on the given data.</step>
-            <step>Clean the dataset by removing any duplicate entries.</step>
-            <step>Generate a chart using the cleaned dataset.</step>
-            <step>Apply different colors to distinguish between various data points.</step>
-            <step>Include a legend to label the different elements within the chart.</step>
-            <step>Ensure all axes and data points are neatly labelled for clarity.</step>
-            </steps>
-        </task>
+    # prompt ='''
+    #     <prompt>
+    #     <context>
+    #         You are required to generate a chart using the provided dataset. Ensure the chart is neatly labelled and utilizes different colors to distinguish between various data points. A legend must be included to label the different elements within the chart for clear interpretation.
+    #     </context>
+    #     <task>
+    #         <steps>
+    #         <step>Based on the given data.</step>
+    #         <step>Clean the dataset by removing any duplicate entries.</step>
+    #         <step>Generate a chart using the cleaned dataset.</step>
+    #         <step>Apply different colors to distinguish between various data points.</step>
+    #         <step>Include a legend to label the different elements within the chart.</step>
+    #         <step>Ensure all axes and data points are neatly labelled for clarity.</step>
+    #         </steps>
+    #     </task>
 
-        <data>
-        {0}
-        </data>
-        <expectedOutput>
-            <chart>
-            <description>A neatly labelled chart with different colors used for various data points and a legend included for clear labelling of the chart elements.</description>
-            </chart>
-        </expectedOutput>
-        </prompt>
-        '''
+    #     <data>
+    #     {0}
+    #     </data>
+    #     <expectedOutput>
+    #         <chart>
+    #         <description>A neatly labelled chart with different colors used for various data points and a legend included for clear labelling of the chart elements.</description>
+    #         </chart>
+    #     </expectedOutput>
+    #     </prompt>
+    #     '''
 
-    ci_prompt = prompt.format(message)
-    print(ci_prompt)
+    # ci_prompt = prompt.format(message)
+    # print(ci_prompt)
 
     try:
         # Create a thread and run the assistant
